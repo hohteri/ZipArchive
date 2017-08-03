@@ -658,8 +658,6 @@ NSString *const SSZipArchiveErrorDomain = @"SSZipArchiveErrorDomain";
             totalLength += [[[NSFileManager defaultManager] attributesOfItemAtPath:fullFilePath error:nil] fileSize];
         }
         
-        NSLog(@"[%@] total length is %d", self.class, totalLength);
-        
         for (fileName in allObjects) {
             BOOL isDir;
             NSString *fullFilePath = [directoryPath stringByAppendingPathComponent:fileName];
@@ -671,7 +669,7 @@ NSString *const SSZipArchiveErrorDomain = @"SSZipArchiveErrorDomain";
             }
             
             if (!isDir) {
-                [zipArchive writeFileAtPath:fullFilePath withFileName:fileName withPassword:password completedLength:completeLength totalLength:totalLength andProgressHandler:progressHandler];
+                completeLength = [zipArchive writeFileAtPath:fullFilePath withFileName:fileName withPassword:password completedLength:completeLength totalLength:totalLength andProgressHandler:progressHandler];
             }
             else
             {
@@ -679,7 +677,7 @@ NSString *const SSZipArchiveErrorDomain = @"SSZipArchiveErrorDomain";
                 {
                     NSString *tempFilePath = [self _temporaryPathForDiscardableFile];
                     NSString *tempFileFilename = [fileName stringByAppendingPathComponent:tempFilePath.lastPathComponent];
-                    [zipArchive writeFileAtPath:tempFilePath withFileName:tempFileFilename withPassword:password completedLength:completeLength totalLength:totalLength andProgressHandler:progressHandler];
+                    completeLength = [zipArchive writeFileAtPath:tempFilePath withFileName:tempFileFilename withPassword:password completedLength:completeLength totalLength:totalLength andProgressHandler:progressHandler];
                 }
             }
             
