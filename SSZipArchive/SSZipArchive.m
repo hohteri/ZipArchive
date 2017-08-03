@@ -647,8 +647,19 @@ NSString *const SSZipArchiveErrorDomain = @"SSZipArchiveErrorDomain";
         fileManager = [[NSFileManager alloc] init];
         NSDirectoryEnumerator *dirEnumerator = [fileManager enumeratorAtPath:directoryPath];
         NSArray *allObjects = dirEnumerator.allObjects;
-        NSUInteger total = allObjects.count, complete = 0;
         NSString *fileName;
+        unsigned long long totalLength = 0, completeLength = 0;
+        
+        for (fileName in allObjects) {
+            BOOL isDir;
+            NSString *fullFilePath = [directoryPath stringByAppendingPathComponent:fileName];
+            [fileManager fileExistsAtPath:fullFilePath isDirectory:&isDir];
+            if (isDir) continue;
+            totalLength += [[[NSFileManager defaultManager] attributesOfItemAtPath:fullFilePath error:nil] fileSize];
+        }
+        
+        NSLog(@"[%@] total length is %d", self.class, totalLength);
+        
         for (fileName in allObjects) {
             BOOL isDir;
             NSString *fullFilePath = [directoryPath stringByAppendingPathComponent:fileName];
@@ -660,7 +671,7 @@ NSString *const SSZipArchiveErrorDomain = @"SSZipArchiveErrorDomain";
             }
             
             if (!isDir) {
-                [zipArchive writeFileAtPath:fullFilePath withFileName:fileName withPassword:password];
+                [zipArchive writeFileAtPath:fullFilePath withFileName:fileName withPassword:password completedLength:completeLength totalLength:totalLength andProgressHandler:progressHandler];
             }
             else
             {
@@ -668,13 +679,10 @@ NSString *const SSZipArchiveErrorDomain = @"SSZipArchiveErrorDomain";
                 {
                     NSString *tempFilePath = [self _temporaryPathForDiscardableFile];
                     NSString *tempFileFilename = [fileName stringByAppendingPathComponent:tempFilePath.lastPathComponent];
-                    [zipArchive writeFileAtPath:tempFilePath withFileName:tempFileFilename withPassword:password];
+                    [zipArchive writeFileAtPath:tempFilePath withFileName:tempFileFilename withPassword:password completedLength:completeLength totalLength:totalLength andProgressHandler:progressHandler];
                 }
             }
-            complete++;
-            if (progressHandler) {
-                progressHandler(complete, total);
-            }
+            
         }
         success = [zipArchive close];
     }
@@ -763,13 +771,13 @@ NSString *const SSZipArchiveErrorDomain = @"SSZipArchiveErrorDomain";
 
 - (BOOL)writeFile:(NSString *)path withPassword:(nullable NSString *)password;
 {
-    return [self writeFileAtPath:path withFileName:nil withPassword:password];
+    return [self writeFileAtPath:path withFileName:nil withPassword:password completedLength:0 totalLength:0 andProgressHandler:nil];
 }
 
 // supports writing files with logical folder/directory structure
 // *path* is the absolute path of the file that will be compressed
 // *fileName* is the relative name of the file how it is stored within the zip e.g. /folder/subfolder/text1.txt
-- (BOOL)writeFileAtPath:(NSString *)path withFileName:(nullable NSString *)fileName withPassword:(nullable NSString *)password
+- (unsigned long long)writeFileAtPath:(NSString *)path withFileName:(nullable NSString *)fileName withPassword:(nullable NSString *)password completedLength: (unsigned long long) completedLength totalLength: (unsigned long long) totalLength andProgressHandler:(void(^ _Nullable)(NSUInteger entryNumber, NSUInteger total))progressHandler
 {
     NSAssert((_zip != NULL), @"Attempting to write to an archive which was never opened");
     
@@ -820,7 +828,7 @@ NSString *const SSZipArchiveErrorDomain = @"SSZipArchiveErrorDomain";
     void *buffer = malloc(CHUNK);
     if (buffer == NULL)
     {
-        return NO;
+        return -1;
     }
 
     zipOpenNewFileInZip3(_zip, afileName, &zipInfo, NULL, 0, NULL, 0, NULL, Z_DEFLATED, Z_DEFAULT_COMPRESSION, 0, -MAX_WBITS, DEF_MEM_LEVEL, Z_DEFAULT_STRATEGY, [password UTF8String], 0);
@@ -829,13 +837,17 @@ NSString *const SSZipArchiveErrorDomain = @"SSZipArchiveErrorDomain";
     while (!feof(input) && !ferror(input))
     {
         len = (unsigned int) fread(buffer, 1, CHUNK, input);
+        completedLength += len;
+        if (progressHandler) {
+            progressHandler(completedLength, totalLength);
+        }
         zipWriteInFileInZip(_zip, buffer, len);
     }
     
     zipCloseFileInZip(_zip);
     free(buffer);
     fclose(input);
-    return YES;
+    return completedLength;
 }
 
 - (BOOL)writeData:(NSData *)data filename:(nullable NSString *)filename withPassword:(nullable NSString *)password;
