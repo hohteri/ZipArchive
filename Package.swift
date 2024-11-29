@@ -21,7 +21,8 @@ let package = Package(
             name: "ZipArchive",
             path: "SSZipArchive",
             resources: [
-                .process("Supporting Files/PrivacyInfo.xcprivacy")],
+                
+            ],
             cSettings: [
                 .define("HAVE_ARC4RANDOM_BUF"),
                 .define("HAVE_ICONV"),
